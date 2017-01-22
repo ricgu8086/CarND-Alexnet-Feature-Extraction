@@ -23,7 +23,7 @@ with open(training_file, mode='rb') as f:
     train = pickle.load(f)
 with open(testing_file, mode='rb') as f:
     test = pickle.load(f)
-    
+
 X_train, Y_train = train['features'], train['labels']
 X_test, Y_test = test['features'], test['labels']
 
@@ -56,7 +56,7 @@ X_train_split, X_validation_split, Y_train_split, Y_validation_split = train_tes
 # TODO: Define placeholders and resize operation.
 
 x = tf.placeholder(tf.float32, (None, 32, 32, 3))
-resized = tf.image.resize_images(x, 227, 227)
+resized = tf.image.resize_images(x, (227, 227))
 
 y = tf.placeholder(tf.int32, (None))
 y_one_hot = tf.one_hot(y, nb_classes)
@@ -83,7 +83,7 @@ fc8b = tf.Variable(tf.zeros(nb_classes))
 logits = tf.matmul(fc7, fc8W)+fc8b
 
 
-# In[9]:
+# In[12]:
 
 # TODO: Define loss, training, accuracy operations.
 # HINT: Look back at your traffic signs project solution, you may
@@ -98,11 +98,10 @@ loss = tf.reduce_mean(cross_entropy)
 training_operation = tf.train.AdamOptimizer(learning_rate=rate).minimize(loss)
 
 
-#init = tf.global_variables_initializer() # This line is not supported in this tensorflow version
-init = tf.initialize_all_variables()
+init = tf.global_variables_initializer()
 
 
-# In[10]:
+# In[13]:
 
 # TODO: Train and evaluate the feature extraction model.
 
@@ -116,14 +115,14 @@ def evaluate(X_data, y_data):
     sess = tf.get_default_session()
     for offset in range(0, num_examples, BATCH_SIZE):
         batch_x, batch_y = X_data[offset:offset+BATCH_SIZE], y_data[offset:offset+BATCH_SIZE]
-        
+
         if len(batch_x): # As BATCH_SIZE is not a divisor of X_train_split it raises an error if this is not checked
             accuracy = sess.run(accuracy_operation, feed_dict={x: batch_x, y: batch_y})
             total_accuracy += (accuracy * len(batch_x))
     return total_accuracy / num_examples
 
 
-# In[ ]:
+# In[14]:
 
 from sklearn.utils import shuffle
 
@@ -137,16 +136,15 @@ print("Training...")
 print()
 
 with tf.Session() as sess:
-    
+
     sess.run(init)
-    
+
     for i in range(EPOCHS):
         X_t, Y_t = shuffle(X_train_split, Y_train_split)
 
-        #for num_batch, offset in enumerate(range(0, BATCH_SIZE, total_batches)):
-        for num_batch, offset in enumerate([0]):
-            #if num_batch % 50 == 0:
-            if num_batch % 1 == 0:
+        for num_batch, offset in enumerate(range(0, num_examples, BATCH_SIZE)):
+
+            if num_batch % 50 == 0:
                 print("Batch %d of %d" % (num_batch+1, total_batches))
 
             end = offset + BATCH_SIZE
@@ -161,16 +159,16 @@ with tf.Session() as sess:
         ls_training_accuracy.append(training_accuracy)
         ls_validation_accuracy.append(validation_accuracy)
 
-        print("EPOCH {} ...".format(i+1))
+        print("\nEPOCH {} ...".format(i+1))
         print("Training Accuracy = {:.3f}".format(training_accuracy))
         print("Validation Accuracy = {:.3f}".format(validation_accuracy))
         print()
 
-saver.save(sess, 'alexnet_transferred_features')
-print("Model saved")
+    saver.save(sess, 'alexnet_transferred_features')
+    print("Model saved")
 
 
-# In[ ]:
+# In[15]:
 
 import pickle
 
@@ -178,6 +176,49 @@ history = {'train_acc': ls_training_accuracy, 'val_acc': ls_validation_accuracy}
 
 with open("model_metrics.pkl", "wb") as fout:
     pickle.dump(history, fout)
-    
+
 print("Metrics saved")
 
+
+# In[23]:
+
+# The following block is commented in order to be run in console
+'''
+import warnings
+warnings.filterwarnings('ignore') # Needs to be done as the fix for the warnings showed by plt.hold are not yet implemented
+
+import pylab as plt
+get_ipython().magic('matplotlib inline')
+
+plt.figure(figsize=(8,5))
+plt.plot(range(1,len(ls_training_accuracy)+1), ls_training_accuracy, 'b')
+plt.xticks(range(1,len(ls_training_accuracy)+1))
+plt.hold(True)
+plt.plot(range(1,len(ls_training_accuracy)+1), ls_validation_accuracy, 'g')
+plt.hold(False)
+_ = plt.legend(("Training", "Validation"), loc='lower right')
+_ = plt.ylabel("Accuracy")
+_ = plt.xlabel("Epochs")
+'''
+
+# ```python
+# EPOCH 10 ...
+# Training Accuracy = 0.867
+# Validation Accuracy = 0.813
+# ```
+# Told to be truth, the accuracy achieved by transfer learning using Alexnet & Imagenet is really low compared with what I achieved training the model from scratch with a LeNet-like architecture. I'm pretty sure that given the higher complexity of this model, It will easy surpass the previous model just by training more epochs (30 could be enough). But every epoch takes soooo sooo long. One epoch on GPU takes more than what takes to train the whole model used in the Traffic Sign Classifier Project with a CPU. Or there is something wrong, or at for this use-case doesn't compensate this approach.
+
+# In[24]:
+
+# X_test is already normalized
+
+with tf.Session() as sess:
+    saver.restore(sess, tf.train.latest_checkpoint('.'))
+
+    test_accuracy = evaluate(X_test, Y_test)
+    print("Test Accuracy = {:.3f}".format(test_accuracy))
+
+
+# :-(
+#
+# I achieved 0.928 of accuracy on test in the Traffic Sign Classifier Project and 0.955 of accuracy on test in the Keras Lab
